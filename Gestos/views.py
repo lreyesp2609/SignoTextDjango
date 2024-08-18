@@ -8,15 +8,15 @@ import cv2
 from Usuarios.models import Usuario
 from .models import Gestos
 from Traduccion.models import Traduccion
-from PIL import Image
-from tensorflow.keras.models import load_model
 import os
+
+# Importar las funciones personalizadas para cargar el modelo y las etiquetas
+from .custom_model import load_model_custom, load_labels
 
 @method_decorator(csrf_exempt, name='dispatch')
 class SignLanguageTranslationView(View):
     def post(self, request, *args, **kwargs):
         try:
-            # Obtener el archivo de imagen del request
             image_file = request.FILES.get('image')
             if not image_file:
                 return JsonResponse({'error': 'No se ha proporcionado ninguna imagen'}, status=400)
@@ -33,38 +33,31 @@ class SignLanguageTranslationView(View):
             image_array = np.asarray(image_resized, dtype=np.float32).reshape(1, 224, 224, 3)
             image_array = (image_array / 127.5) - 1  # Normalización
 
-            # Cargar el modelo
-            model_path = os.path.join('Data', 'keras_model.h5')
-            model = load_model(model_path, compile=False)
+            print("Imagen procesada correctamente")
+            
+            # Cargar el modelo y las etiquetas
+            model = load_model_custom()
+            class_names = load_labels()
 
             # Realizar la predicción
             prediction = model.predict(image_array)
-            predicted_class = np.argmax(prediction)
-            
-            # Cargar las etiquetas
-            labels_path = os.path.join('Data', 'labels.txt')
-            with open(labels_path, "r") as file:
-                class_names = file.readlines()
+            predicted_class = np.argmax(prediction[0])
+            confidence_score = prediction[0][predicted_class]
 
-            # Obtener la descripción del gesto
-            gesture_description = class_names[predicted_class].strip()
+            print(f"Predicción: {predicted_class}, Confianza: {confidence_score}")
 
-            # Obtener el usuario con ID 1
-            try:
-                usuario = Usuario.objects.get(id=1)  # Usa Usuario en lugar de User
-            except Usuario.DoesNotExist:
-                return JsonResponse({'error': 'Usuario con ID 1 no encontrado'}, status=404)
+            # Obtener el gesto correspondiente de la base de datos
+            gesto = Gestos.objects.filter(id=predicted_class).first()
 
-            # Guardar la traducción
-            traduccion = Traduccion(
-                textoTraducido=gesture_description,
-                mostrar=gesture_description,
-                usuario=usuario,  # Asignar el usuario con ID 1
-                sistema=None,  # Ajusta esto si tienes un sistema específico
-            )
-            traduccion.save()
-
-            return JsonResponse({'textoTraducido': gesture_description}, status=200)
+            # Verificar la confianza antes de devolver el resultado
+            if confidence_score >= 0.99 and gesto:
+                return JsonResponse({
+                    'predicted_class': int(predicted_class),  # Convertir a int de Python
+                    'confidence_score': float(confidence_score),
+                    'letra': gesto.descripcion
+                })
+            else:
+                return JsonResponse({'error': 'Gesto no reconocido'}, status=404)
 
         except Exception as e:
             return JsonResponse({'error': str(e)}, status=500)

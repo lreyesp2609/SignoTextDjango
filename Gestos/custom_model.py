@@ -22,7 +22,6 @@ objetos_personalizados = {
     'DepthwiseConv2D': custom_depthwise_conv2d
 }
 
-# Cargar el modelo usando una ruta relativa ajustada
 def load_model_custom():
     current_directory = os.getcwd()
     model_path = os.path.join(current_directory, 'Gestos', 'Data', 'keras_model.h5')
@@ -34,7 +33,6 @@ def load_model_custom():
         print(f"Error al cargar el modelo: {e}")
         raise
 
-# Cargar las etiquetas usando una ruta relativa ajustada
 def load_labels():
     current_directory = os.getcwd()
     labels_path = os.path.join(current_directory, 'Gestos', 'Data', 'labels.txt')
